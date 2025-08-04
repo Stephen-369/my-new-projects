@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>机械设计AI助教原型 (DeepSeek版)</title>
+    <!-- 引入 Tailwind CSS，用于快速美化界面 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 设置全局字体为 Inter，并确保页面居中 */
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f4f8; /* 浅蓝色背景 */
+            padding: 1rem; /* 增加整体内边距 */
+        }
+        /* 隐藏滚动条但允许滚动 */
+        textarea {
+            overflow-y: auto;
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none;  /* IE and Edge */
+        }
+        textarea::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, Opera */
+        }
+        /* Canvas 样式，确保响应式且居中 */
+        canvas {
+            background-color: #e0e7ff; /* 浅蓝色背景 */
+            border: 2px solid #a7b7ed;
+            border-radius: 0.75rem; /* rounded-xl */
+            display: block; /* 移除默认行内元素间距 */
+            margin: 0 auto; /* 居中 */
+        }
+        /* 隐藏加载指示器 */
+        #loading-indicator {
+            display: none !important; /* Force hide the loading indicator */
+        }
+    </style>
+</head>
+<body class="p-4">
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-2xl border border-gray-200">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">机械设计AI助教原型 (DeepSeek版)</h1>
+
+        <!-- 四杆机构参数输入区域 -->
+        <div class="mb-6 border-b pb-4 border-gray-200">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">四杆机构分析与仿真</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label for="l1-input" class="block text-gray-700 text-sm font-semibold mb-1">连杆 $L_1$ (输入曲柄):</label>
+                    <input type="number" id="l1-input" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" placeholder="例如: 20" value="20">
+                </div>
+                <div>
+                    <label for="l2-input" class="block text-gray-700 text-sm font-semibold mb-1">连杆 $L_2$ (连杆):</label>
+                    <input type="number" id="l2-input" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" placeholder="例如: 50" value="50">
+                </div>
+                <div>
+                    <label for="l3-input" class="block text-gray-700 text-sm font-semibold mb-1">连杆 $L_3$ (输出摇杆):</label>
+                    <input type="number" id="l3-input" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" placeholder="例如: 40" value="40">
+                </div>
+                <div>
+                    <label for="l4-input" class="block text-gray-700 text-sm font-semibold mb-1">连杆 $L_4$ (固定杆/机架):</label>
+                    <input type="number" id="l4-input" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" placeholder="例如: 60" value="60">
+                </div>
+            </div>
+            <div class="flex flex-col md:flex-row gap-4">
+                <button id="analyze-fourbar-button"
+                        class="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition duration-200 shadow-md">
+                    AI分析机构类型
+                </button>
+                <button id="start-simulation-button"
+                        class="flex-1 bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition duration-200 shadow-md">
+                    开始动态仿真
+                </button>
+                <button id="stop-simulation-button"
+                        class="flex-1 bg-red-500 text-white py-3 rounded-lg font-semibold hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 transition duration-200 shadow-md">
+                    停止仿真
+                </button>
+            </div>
+
+            <!-- 仿真画布 -->
+            <div class="mt-6">
+                <canvas id="fourbar-canvas" class="w-full h-auto" width="600" height="400"></canvas>
+            </div>
+        </div>
+
+        <!-- 凸轮机构分析区域 -->
+        <div class="mb-6 border-b pb-4 border-gray-200 mt-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">凸轮机构分析</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label for="cam-base-radius" class="block text-gray-700 text-sm font-semibold mb-1">基圆半径 (mm):</label>
+                    <input type="number" id="cam-base-radius" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="例如: 41" value="41">
+                </div>
+                <div>
+                    <label for="cam-lift" class="block text-gray-700 text-sm font-semibold mb-1">升程 (mm):</label>
+                    <input type="number" id="cam-lift" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="例如: 18" value="18">
+                </div>
+                <div>
+                    <label for="cam-push-angle" class="block text-gray-700 text-sm font-semibold mb-1">推程角度 (度):</label>
+                    <input type="number" id="cam-push-angle" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" placeholder="例如: 270" value="270">
+                </div>
+                <div>
+                    <label for="cam-return-angle" class="block text-gray-700 text-sm font-semibold mb-1">回程角度 (度):</label>
+                    <input type="number" id="cam-return-angle" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" placeholder="例如: 90" value="90">
+                </div>
+                <div>
+                    <label for="cam-roller-radius" class="block text-gray-700 text-sm font-semibold mb-1">滚子半径 (mm):</label>
+                    <input type="number" id="cam-roller-radius" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="例如: 5" value="5">
+                </div>
+                <div class="md:col-span-2">
+                    <label for="cam-follower-type" class="block text-gray-700 text-sm font-semibold mb-1">从动件运动规律:</label>
+                    <select id="cam-follower-type" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="等速运动" selected>等速运动</option>
+                        <option value="等加速等减速运动">等加速等减速运动</option>
+                        <option value="简谐运动">简谐运动</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex flex-col md:flex-row gap-4">
+                <button id="analyze-cam-button"
+                        class="flex-1 bg-orange-600 text-white py-3 rounded-lg font-semibold hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-opacity-50 transition duration-200 shadow-md">
+                    AI分析凸轮机构
+                </button>
+                <button id="draw-cam-button"
+                        class="flex-1 bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 transition duration-200 shadow-md">
+                    绘制凸轮轮廓
+                </button>
+                 <button id="start-cam-simulation-button"
+                        class="flex-1 bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition duration-200 shadow-md">
+                    开始凸轮仿真
+                </button>
+                <button id="stop-cam-simulation-button"
+                        class="flex-1 bg-red-500 text-white py-3 rounded-lg font-semibold hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 transition duration-200 shadow-md">
+                    停止凸轮仿真
+                </button>
+            </div>
+            <!-- 凸轮仿真画布 -->
+            <div class="mt-6">
+                <canvas id="cam-canvas" class="w-full h-auto" width="400" height="400"></canvas>
+            </div>
+        </div>
+
+        <!-- 传动装置分析区域 (以齿轮传动为例) -->
+        <div class="mb-6 border-b pb-4 border-gray-200 mt-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">传动装置分析 (齿轮传动)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label for="gear-input-teeth" class="block text-gray-700 text-sm font-semibold mb-1">主动轮齿数 $Z_1$:</label>
+                    <input type="number" id="gear-input-teeth" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" placeholder="例如: 20" value="20">
+                </div>
+                <div>
+                    <label for="gear-output-teeth" class="block text-gray-700 text-sm font-semibold mb-1">从动轮齿数 $Z_2$:</label>
+                    <input type="number" id="gear-output-teeth" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" placeholder="例如: 40" value="40">
+                </div>
+            </div>
+            <button id="analyze-gear-button"
+                    class="w-full bg-teal-600 text-white py-3 rounded-lg font-semibold hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-opacity-50 transition duration-200 shadow-md">
+                AI分析齿轮传动
+            </button>
+        </div>
+
+        <!-- 通用问题输入区域 -->
+        <div class="mb-4 mt-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">通用问题</h2>
+            <label for="user-input" class="block text-gray-700 text-sm font-semibold mb-2">
+                请输入您的问题（例如：解释四杆机构的曲柄存在条件）:
+            </label>
+            <textarea id="user-input"
+                      class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200 resize-y min-h-[100px]"
+                      placeholder="在这里输入您关于机械设计基础的任何问题..."></textarea>
+        </div>
+
+        <!-- 提交通用问题按钮 -->
+        <button id="send-button"
+                class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition duration-200 shadow-md">
+            提问
+        </button>
+
+        <!-- 加载指示器 -->
+        <div id="loading-indicator" class="hidden text-center mt-4 text-blue-600 font-medium">
+            <!-- This element is now hidden via CSS to prevent display -->
+        </div>
+
+        <!-- AI 回答显示区域 -->
+        <div class="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg min-h-[150px] overflow-auto">
+            <h2 class="text-lg font-semibold text-gray-800 mb-2">AI助教的回答:</h2>
+            <p id="ai-response" class="text-gray-700 whitespace-pre-wrap">
+                智能体将在这里给出回答。
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // 获取页面元素 - 四杆机构
+        const l1Input = document.getElementById('l1-input');
+        const l2Input = document.getElementById('l2-input');
+        const l3Input = document.getElementById('l3-input');
+        const l4Input = document.getElementById('l4-input');
+        const analyzeFourbarButton = document.getElementById('analyze-fourbar-button');
+        const startSimulationButton = document.getElementById('start-simulation-button');
+        const stopSimulationButton = document.getElementById('stop-simulation-button');
+
+        // 获取页面元素 - 凸轮机构
+        const camBaseRadiusInput = document.getElementById('cam-base-radius');
+        const camLiftInput = document.getElementById('cam-lift');
+        const camPushAngleInput = document.getElementById('cam-push-angle'); 
+        const camReturnAngleInput = document.getElementById('cam-return-angle'); 
+        const camRollerRadiusInput = document.getElementById('cam-roller-radius'); 
+        const camFollowerTypeSelect = document.getElementById('cam-follower-type');
+        const analyzeCamButton = document.getElementById('analyze-cam-button');
+        const drawCamButton = document.getElementById('draw-cam-button'); 
+        const startCamSimulationButton = document.getElementById('start-cam-simulation-button');
+        const stopCamSimulationButton = document.getElementById('stop-cam-simulation-button');
+
+        // 获取页面元素 - 传动装置
+        const gearInputTeeth = document.getElementById('gear-input-teeth');
+        const gearOutputTeeth = document.getElementById('gear-output-teeth');
+        const analyzeGearButton = document.getElementById('analyze-gear-button');
+
+        // 获取页面元素 - 通用
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+        const aiResponse = document.getElementById('ai-response');
+        const loadingIndicator = document.getElementById('loading-indicator'); 
+
+        const fourbarCanvas = document.getElementById('fourbar-canvas');
+        const fourbarCtx = fourbarCanvas.getContext('2d'); 
+
+        const camCanvas = document.getElementById('cam-canvas'); 
+        const camCtx = camCanvas.getContext('2d'); 
+
+        // 全局变量用于四杆动画
+        let fourbarAnimationFrameId = null;
+        let fourbarCurrentAngle = 0; 
+        const fourbarAngularSpeed = 0.05; 
+
+        // 全局变量用于凸轮动画
+        let camAnimationFrameId = null;
+        let camCurrentAngle = 0; // 凸轮的当前旋转角度 (弧度)
+        const camAngularSpeed = 0.03; // 凸轮动画速度
+        let camProfilePoints = []; // 存储凸轮轮廓点的数组，用于高效绘制
+
+        // DeepSeek API 配置
+        const deepseekApiKey = "sk-3cf052ea1dd947a68c30a3488a3a2fbe"; // 您的 DeepSeek API Key (已更新)
+        const deepseekApiUrl = "https://api.deepseek.com/chat/completions"; // DeepSeek 聊天补全API端点
+        const deepseekModel = "deepseek-chat"; // DeepSeek 模型名称
+
+        // 通用函数：发送请求到 DeepSeek API
+        async function sendToDeepSeek(promptText, systemInstruction = "你是一位精通《机械设计基础》的AI助教。") {
+            aiResponse.textContent = '';
+            // 禁用所有按钮
+            sendButton.disabled = true;
+            analyzeFourbarButton.disabled = true;
+            startSimulationButton.disabled = true;
+            stopSimulationButton.disabled = true;
+            analyzeCamButton.disabled = true;
+            drawCamButton.disabled = true; 
+            startCamSimulationButton.disabled = true;
+            stopCamSimulationButton.disabled = true;
+            analyzeGearButton.disabled = true;
+
+            try {
+                // 构建 DeepSeek API 所需的 messages 数组
+                // 每次请求都发送完整的上下文，以便AI理解
+                const messages = [
+                    { role: "system", content: systemInstruction },
+                    { role: "user", content: promptText }
+                ];
+
+                const payload = {
+                    model: deepseekModel,
+                    messages: messages,
+                    stream: false // 非流式响应
+                };
+
+                const response = await fetch(deepseekApiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${deepseekApiKey}` // DeepSeek 认证方式
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                let rawResponseText = await response.text();
+
+                if (!response.ok) {
+                    let errorData;
+                    try {
+                        errorData = JSON.parse(rawResponseText);
+                    } catch (e) {
+                        errorData = { error: { message: `非JSON错误响应: ${rawResponseText.substring(0, Math.min(rawResponseText.length, 200))}...` } };
+                    }
+                    throw new Error(`API 请求失败: ${response.status} - ${errorData.error.message || '未知错误'}`);
+                }
+
+                let result;
+                try {
+                    result = JSON.parse(rawResponseText);
+                } catch (jsonParseError) {
+                    throw new Error(`AI响应格式无效。原始内容: ${rawResponseText.trim() === '' ? '（无内容）' : rawResponseText.substring(0, Math.min(rawResponseText.length, 200)) + '...'}`);
+                }
+
+                if (result.choices && result.choices.length > 0 && result.choices[0].message && result.choices[0].message.content) {
+                    const text = result.choices[0].message.content;
+                    aiResponse.textContent = text;
+                } else {
+                    aiResponse.textContent = '未能获取到AI的回答，请尝试更清晰的输入。';
+                    console.error('AI响应结构不符合预期:', result);
+                }
+
+            } catch (error) {
+                console.error('请求AI时发生错误:', error);
+                let displayMessage = `请求AI时发生错误: ${error.message}`;
+                if (error.message.includes("401") || error.message.includes("API密钥")) {
+                    displayMessage = `认证失败：API密钥无效或权限不足。请检查您的DeepSeek API密钥。`;
+                } else if (error.message.includes("AI响应格式无效")) {
+                    displayMessage = `AI服务返回了非预期的响应格式（可能为空或非JSON）。请稍后再试或联系支持。`;
+                }
+                aiResponse.textContent = displayMessage;
+            } finally {
+                // 重新启用所有按钮
+                sendButton.disabled = false;
+                analyzeFourbarButton.disabled = false;
+                startSimulationButton.disabled = false;
+                stopSimulationButton.disabled = false;
+                analyzeCamButton.disabled = false;
+                drawCamButton.disabled = false; 
+                startCamSimulationButton.disabled = false; 
+                stopCamSimulationButton.disabled = false; 
+                analyzeGearButton.disabled = false;
+            }
+        }
+
+        // 绘制四杆机构的函数 (已优化)
+        function drawFourBarMechanism(ctx, L1, L2, L3, L4, angle) {
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); 
+
+            const totalLength = L1 + L2 + L3 + L4;
+            // 确保缩放比例合适，留出一些边距
+            const scale = Math.min(ctx.canvas.width, ctx.canvas.height) / (totalLength * 0.8); 
+
+            const originX = ctx.canvas.width / 2;
+            const originY = ctx.canvas.height / 2;
+
+            // 固定铰链 A 和 D 的坐标
+            const Ax = originX - (L4 * scale) / 2;
+            const Ay = originY; 
+
+            const Dx = originX + (L4 * scale) / 2;
+            const Dy = originY;
+
+            // 动铰链 B 的坐标 (基于 L1 和当前角度)
+            const Bx = Ax + L1 * scale * Math.cos(angle);
+            const By = Ay + L1 * scale * Math.sin(angle);
+
+            // 计算 B 到 D 的距离，用于确定 C 点
+            const distBD_sq = (Dx - Bx) * (Dx - Bx) + (Dy - By) * (Dy - By);
+            const distBD = Math.sqrt(distBD_sq);
+
+            // 检查机构是否能形成
+            if (distBD > L2 * scale + L3 * scale || distBD < Math.abs(L2 * scale - L3 * scale)) {
+                ctx.fillStyle = 'red';
+                ctx.font = '20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('机构无法形成或已变形！', originX, originY - 50);
+                stopFourbarAnimation(); 
+                return;
+            }
+
+            // 使用余弦定理计算角度，确定 C 点坐标
+            const alpha = Math.acos((L3 * L3 * scale * scale + distBD_sq - L2 * L2 * scale * scale) / (2 * L3 * scale * distBD));
+            const beta = Math.atan2(By - Dy, Bx - Dx);
+
+            const Cx = Dx + L3 * scale * Math.cos(beta + alpha);
+            const Cy = Dy + L3 * scale * Math.sin(beta + alpha);
+
+            // 绘制连杆
+            ctx.strokeStyle = '#4A90E2'; // 连杆颜色
+            ctx.lineWidth = 8; // 连杆更粗
+            ctx.lineCap = 'round'; // 圆头连杆
+
+            // 固定杆 L4 (机架)
+            ctx.beginPath();
+            ctx.moveTo(Ax, Ay);
+            ctx.lineTo(Dx, Dy);
+            ctx.stroke();
+            // 机架标记
+            ctx.fillStyle = '#666';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('机架 L4', (Ax + Dx) / 2, Ay + 20);
+
+
+            // 输入曲柄 L1
+            ctx.beginPath();
+            ctx.moveTo(Ax, Ay);
+            ctx.lineTo(Bx, By);
+            ctx.stroke();
+            ctx.fillText(`L1: ${L1}`, (Ax + Bx) / 2, (Ay + By) / 2 - 15);
+
+
+            // 连杆 L2
+            ctx.beginPath();
+            ctx.moveTo(Bx, By);
+            ctx.lineTo(Cx, Cy);
+            ctx.stroke();
+            ctx.fillText(`L2: ${L2}`, (Bx + Cx) / 2, (By + Cy) / 2 - 15);
+
+
+            // 输出摇杆 L3
+            ctx.beginPath();
+            ctx.moveTo(Dx, Dy);
+            ctx.lineTo(Cx, Cy);
+            ctx.stroke();
+            ctx.fillText(`L3: ${L3}`, (Dx + Cx) / 2, (Dy + Cy) / 2 - 15);
+
+
+            // 绘制铰链 (关节)
+            ctx.fillStyle = '#FF6347'; // 关节颜色
+            const jointRadius = 10; // 关节更大
+
+            ctx.beginPath(); 
+            ctx.arc(Ax, Ay, jointRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath(); 
+            ctx.arc(Bx, By, jointRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath(); 
+            ctx.arc(Cx, Cy, jointRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath(); 
+            ctx.arc(Dx, Dy, jointRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // 四杆动画循环函数
+        function animateFourbar() {
+            const L1 = parseFloat(l1Input.value);
+            const L2 = parseFloat(l2Input.value);
+            const L3 = parseFloat(l3Input.value);
+            const L4 = parseFloat(l4Input.value);
+
+            if (isNaN(L1) || isNaN(L2) || isNaN(L3) || isNaN(L4) || L1 <= 0 || L2 <= 0 || L3 <= 0 || L4 <= 0) {
+                fourbarCtx.clearRect(0, 0, fourbarCanvas.width, fourbarCanvas.height);
+                fourbarCtx.fillStyle = 'red';
+                fourbarCtx.font = '16px Arial';
+                fourbarCtx.textAlign = 'center';
+                fourbarCtx.fillText('请输入有效的杆长（正数）进行仿真！', fourbarCanvas.width / 2, fourbarCanvas.height / 2);
+                stopFourbarAnimation();
+                return;
+            }
+
+            drawFourBarMechanism(fourbarCtx, L1, L2, L3, L4, fourbarCurrentAngle);
+
+            fourbarCurrentAngle += fourbarAngularSpeed; 
+            if (fourbarCurrentAngle > Math.PI * 2) { 
+                fourbarCurrentAngle -= Math.PI * 2;
+            }
+            fourbarAnimationFrameId = requestAnimationFrame(animateFourbar); 
+        }
+
+        // 停止四杆动画的函数
+        function stopFourbarAnimation() {
+            if (fourbarAnimationFrameId) {
+                cancelAnimationFrame(fourbarAnimationFrameId);
+                fourbarAnimationFrameId = null;
+                fourbarCtx.clearRect(0, 0, fourbarCanvas.width, fourbarCanvas.height);
+                fourbarCtx.fillStyle = '#333';
+                fourbarCtx.font = '16px Arial';
+                fourbarCtx.textAlign = 'center';
+                fourbarCtx.fillText('仿真已停止。', fourbarCanvas.width / 2, fourbarCanvas.height / 2);
+            }
+        }
+
+        // 计算精确凸轮轮廓点的函数 (用于静态绘制和动画)
+        function calculateCamProfilePoints(baseRadius, lift, pushAngleDeg, returnAngleDeg, rollerRadius) {
+            const points = [];
+            const pushAngleRad = pushAngleDeg * Math.PI / 180;
+            const returnAngleRad = returnAngleDeg * Math.PI / 180;
+            const totalAngleCovered = pushAngleDeg + returnAngleDeg; // 实际运动覆盖的角度
+
+            const step = 0.5; // 每0.5度计算一个点
+
+            for (let angleDeg = 0; angleDeg <= 360; angleDeg += step) {
+                const camAngleRad = angleDeg * Math.PI / 180;
+                let s = 0; // 从动件位移
+                let s_prime = 0; // 从动件速度 (s的导数)，用于压力角计算
+
+                // 根据等速运动规律计算位移
+                if (angleDeg >= 0 && angleDeg <= pushAngleDeg) {
+                    // 推程 (等速)
+                    s = lift * (camAngleRad / pushAngleRad);
+                    s_prime = (pushAngleRad === 0) ? 0 : lift / pushAngleRad; // 避免除以零
+                } else if (angleDeg > pushAngleDeg && angleDeg <= totalAngleCovered) {
+                    // 回程 (等速)
+                    const angleInReturnPhaseRad = camAngleRad - pushAngleRad;
+                    s = lift - lift * (angleInReturnPhaseRad / returnAngleRad);
+                    s_prime = (returnAngleRad === 0) ? 0 : -lift / returnAngleRad; // 避免除以零
+                } else {
+                    // 停歇段 (如果推程+回程 < 360)
+                    s = 0; // 停留在最低点
+                    s_prime = 0;
+                }
+
+                const Rp = baseRadius + s; // 理论节圆半径
+                let alpha = 0; // 压力角
+                // 计算压力角，避免 Rp 为零
+                if (Rp !== 0) {
+                    alpha = Math.atan2(s_prime, Rp);
+                }
+                
+                // 凸轮轮廓点 (x_c, y_c) 的精确计算 - 径向滚子从动件，凸轮顺时针转动
+                // 参考机械原理或机构学相关公式
+                const x_profile = Rp * Math.cos(camAngleRad) + rollerRadius * Math.sin(camAngleRad + alpha);
+                const y_profile = Rp * Math.sin(camAngleRad) - rollerRadius * Math.cos(camAngleRad + alpha);
+
+                points.push({ x: x_profile, y: y_profile });
+            }
+            return points;
+        }
+
+        // 根据预计算点绘制凸轮轮廓（用于静态显示和动画中的凸轮本体）
+        function drawCamProfileFromPoints(ctx, points, baseRadius, rollerRadius, scale, rotationAngle = 0) {
+            if (points.length === 0) return;
+
+            ctx.save();
+            ctx.translate(ctx.canvas.width / 2, ctx.canvas.height / 2); // 将原点移到画布中心
+            ctx.scale(scale, scale); // 应用缩放
+            ctx.rotate(rotationAngle); // 应用旋转角度
+
+            // 绘制凸轮轮廓
+            ctx.beginPath();
+            ctx.strokeStyle = '#00008B'; // 深蓝色
+            ctx.lineWidth = 2 / scale; // 根据缩放调整线宽，保持视觉一致
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.closePath();
+            ctx.stroke();
+            ctx.fillStyle = '#ADD8E6'; // 浅蓝色填充
+            ctx.fill();
+
+            // 绘制基圆 (虚线)
+            ctx.beginPath();
+            ctx.arc(0, 0, baseRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = '#808080'; // 灰色
+            ctx.setLineDash([5 / scale, 5 / scale]); // 虚线
+            ctx.stroke();
+            ctx.setLineDash([]); // 恢复实线
+
+            // 绘制凸轮中心
+            ctx.beginPath();
+            ctx.arc(0, 0, 5 / scale, 0, Math.PI * 2); // 根据缩放调整半径
+            ctx.fillStyle = 'black';
+            ctx.fill();
+
+            ctx.restore(); // 恢复之前保存的绘图状态
+        }
+
+        // 绘制从动件（滚子和杆）的函数
+        function drawFollower(ctx, displacement, rollerRadius, scale, baseRadius) {
+            ctx.save();
+            ctx.translate(ctx.canvas.width / 2, ctx.canvas.height / 2); // 将原点移到画布中心
+            ctx.scale(scale, scale); // 应用缩放
+
+            // 滚子中心位置 (径向从动件沿垂直方向移动)
+            const rollerCenterX = 0;
+            const rollerCenterY = -(baseRadius + displacement); // Y是负值，表示向上运动，相对凸轮中心
+
+            // 绘制滚子
+            ctx.beginPath();
+            ctx.arc(rollerCenterX, rollerCenterY, rollerRadius, 0, Math.PI * 2);
+            ctx.fillStyle = '#FF4500'; // 橙红色
+            ctx.fill();
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1 / scale; // 根据缩放调整线宽
+            ctx.stroke();
+
+            // 绘制从动件杆 (简化为矩形，连接滚子并向上延伸)
+            const stemWidth = rollerRadius * 1.5;
+            const stemBottomY = rollerCenterY - rollerRadius; // 杆的底部从滚子顶部开始
+            
+            // 确保杆能延伸到画布顶部附近，并考虑缩放
+            // 杆的顶部Y坐标 (在缩放后的坐标系中，负值越小越靠上)
+            const canvasTopYInScaledCoords = -(ctx.canvas.height / 2) / scale;
+            const stemTopY = canvasTopYInScaledCoords;
+            
+            // 杆的高度
+            const stemHeight = stemBottomY - stemTopY;
+
+            ctx.fillStyle = '#696969'; // 深灰色
+            ctx.fillRect(rollerCenterX - stemWidth / 2, stemTopY, stemWidth, stemHeight);
+
+            ctx.restore();
+        }
+
+        // 计算凸轮相关图形的合适缩放比例
+        function calculateCamScale(canvasWidth, canvasHeight, baseRadius, lift, rollerRadius) {
+            const camMaxOuterRadius = baseRadius + lift + rollerRadius;
+            // 估算从动件在最高点时，从画布中心到其顶部的最大视觉高度
+            // 考虑基圆半径+升程+滚子半径，以及从动件杆的额外延伸部分（假设为基圆半径的1.5倍作为经验值）
+            const estimatedMaxFollowerVisualHeight = camMaxOuterRadius + baseRadius * 1.5; 
+            
+            // 比较凸轮直径和从动件视觉高度，取最大值作为整体绘制范围
+            const maxDimensionNeeded = Math.max(2 * camMaxOuterRadius, estimatedMaxFollowerVisualHeight);
+            
+            // 留出额外的边距，避免裁剪
+            const paddingFactor = 1.3; 
+            return Math.min(canvasWidth, canvasHeight) / (maxDimensionNeeded * paddingFactor);
+        }
+
+
+        // 凸轮动画循环函数
+        function animateCam() {
+            const baseRadius = parseFloat(camBaseRadiusInput.value);
+            const lift = parseFloat(camLiftInput.value);
+            const pushAngle = parseFloat(camPushAngleInput.value);
+            const returnAngle = parseFloat(camReturnAngleInput.value);
+            const rollerRadius = parseFloat(camRollerRadiusInput.value);
+
+            if (isNaN(baseRadius) || isNaN(lift) || isNaN(pushAngle) || isNaN(returnAngle) || isNaN(rollerRadius) || baseRadius <= 0 || lift < 0 || pushAngle < 0 || returnAngle < 0 || rollerRadius < 0) {
+                camCtx.clearRect(0, 0, camCanvas.width, camCanvas.height);
+                camCtx.fillStyle = 'red';
+                camCtx.font = '16px Arial';
+                camCtx.textAlign = 'center';
+                camCtx.fillText('请输入有效的凸轮参数进行仿真！', camCanvas.width / 2, camCanvas.height / 2);
+                stopCamAnimation();
+                return;
+            }
+
+            // 计算当前凸轮角度下的从动件位移
+            const angleDeg = (camCurrentAngle * 180 / Math.PI) % 360; // 归一化角度
+            let s = 0; 
+
+            if (angleDeg >= 0 && angleDeg <= pushAngle) {
+                s = lift * (angleDeg / pushAngle);
+            } else if (angleDeg > pushAngle && angleDeg <= (pushAngle + returnAngle)) {
+                const angleInReturnPhase = angleDeg - pushAngle;
+                s = lift - lift * (angleInReturnPhase / returnAngle);
+            } else {
+                s = 0;
+            }
+
+            // 计算合适的缩放比例
+            const scale = calculateCamScale(camCanvas.width, camCanvas.height, baseRadius, lift, rollerRadius);
+            
+            camCtx.clearRect(0, 0, camCanvas.width, camCanvas.height);
+
+            // 绘制旋转的凸轮本体
+            drawCamProfileFromPoints(camCtx, camProfilePoints, baseRadius, rollerRadius, scale, camCurrentAngle);
+            
+            // 绘制从动件
+            drawFollower(camCtx, s, rollerRadius, scale, baseRadius); 
+
+            camCurrentAngle += camAngularSpeed; 
+            if (camCurrentAngle > Math.PI * 2) { 
+                camCurrentAngle -= Math.PI * 2;
+            }
+            camAnimationFrameId = requestAnimationFrame(animateCam); 
+        }
+
+        // 停止凸轮动画
+        function stopCamAnimation() {
+            if (camAnimationFrameId) {
+                cancelAnimationFrame(camAnimationFrameId);
+                camAnimationFrameId = null;
+                camCtx.clearRect(0, 0, camCanvas.width, camCanvas.height);
+                camCtx.fillStyle = '#333';
+                camCtx.font = '16px Arial';
+                camCtx.textAlign = 'center';
+                camCtx.fillText('凸轮仿真已停止。', camCanvas.width / 2, camCanvas.height / 2);
+            }
+        }
+
+        // 绑定事件监听器 - 通用提问
+        sendButton.addEventListener('click', () => {
+            stopFourbarAnimation(); 
+            stopCamAnimation(); // 停止凸轮仿真
+            const prompt = userInput.value.trim();
+            if (!prompt) {
+                aiResponse.textContent = '请输入您的问题。';
+                return;
+            }
+            // 调用 DeepSeek API 进行通用问题回答
+            sendToDeepSeek(prompt, "你是一位精通《机械设计基础》的AI助教，请用通俗易懂的语言回答学生关于机械机构、传动、设计原理等方面的知识问题。");
+        });
+
+        // 绑定事件监听器 - 四杆机构分析
+        analyzeFourbarButton.addEventListener('click', () => {
+            stopFourbarAnimation(); 
+            stopCamAnimation(); // 停止凸轮仿真
+            const l1 = parseFloat(l1Input.value);
+            const l2 = parseFloat(l2Input.value);
+            const l3 = parseFloat(l3Input.value);
+            const l4 = parseFloat(l4Input.value);
+
+            if (isNaN(l1) || isNaN(l2) || isNaN(l3) || isNaN(l4) || l1 <= 0 || l2 <= 0 || l3 <= 0 || l4 <= 0) {
+                aiResponse.textContent = '请输入有效的杆长（正数）。';
+                return;
+            }
+
+            const fourBarPrompt = `请根据以下四杆机构的杆长进行分析：
+            输入曲柄 L1 = ${l1}
+            连杆 L2 = ${l2}
+            输出摇杆 L3 = ${l3}
+            固定杆 L4 = ${l4}
+
+            请根据格拉晓夫准则判断该机构的类型（如曲柄摇杆机构、双曲柄机构、双摇杆机构、杆组等），并简要描述其运动特性。如果无法形成机构，也请说明。
+            请确保回答清晰、准确，并包含格拉晓夫准则的判断过程。`;
+
+            // 调用 DeepSeek API 进行四杆机构分析
+            sendToDeepSeek(fourBarPrompt, "你是一位专业的机械机构分析师，专注于四杆机构。");
+        });
+
+        // 绑定事件监听器 - 开始四杆仿真
+        startSimulationButton.addEventListener('click', () => {
+            const L1 = parseFloat(l1Input.value);
+            const L2 = parseFloat(l2Input.value);
+            const L3 = parseFloat(l3Input.value);
+            const L4 = parseFloat(l4Input.value);
+
+            if (isNaN(L1) || isNaN(L2) || isNaN(L3) || isNaN(L4) || L1 <= 0 || L2 <= 0 || L3 <= 0 || L4 <= 0) {
+                aiResponse.textContent = '请先输入有效的杆长（正数）才能开始仿真。';
+                return;
+            }
+
+            stopFourbarAnimation(); 
+            stopCamAnimation(); // 停止凸轮仿真
+            fourbarCurrentAngle = 0; 
+            animateFourbar(); 
+        });
+
+        // 绑定事件监听器 - 停止四杆仿真
+        stopSimulationButton.addEventListener('click', () => {
+            stopFourbarAnimation();
+        });
+
+        // 绑定事件监听器 - 凸轮机构AI分析
+        analyzeCamButton.addEventListener('click', () => {
+            stopFourbarAnimation(); 
+            stopCamAnimation(); // 停止凸轮仿真
+            const baseRadius = parseFloat(camBaseRadiusInput.value);
+            const lift = parseFloat(camLiftInput.value);
+            const pushAngle = parseFloat(camPushAngleInput.value);
+            const returnAngle = parseFloat(camReturnAngleInput.value);
+            const rollerRadius = parseFloat(camRollerRadiusInput.value); 
+            const followerType = camFollowerTypeSelect.value;
+
+            if (isNaN(baseRadius) || isNaN(lift) || isNaN(pushAngle) || isNaN(returnAngle) || isNaN(rollerRadius) || baseRadius <= 0 || lift < 0 || pushAngle < 0 || returnAngle < 0 || rollerRadius < 0) {
+                aiResponse.textContent = '请输入有效的凸轮机构参数（基圆半径、升程、角度和滚子半径需为非负数，基圆半径需大于0）。';
+                return;
+            }
+            if (pushAngle + returnAngle > 360) {
+                 aiResponse.textContent = '推程角度和回程角度之和不能超过360度。';
+                 return;
+            }
+
+            const camPrompt = `请作为机械设计基础的AI助教，分析以下凸轮机构：
+            基圆半径: ${baseRadius} mm
+            升程: ${lift} mm
+            推程角度: ${pushAngle} 度
+            回程角度: ${returnAngle} 度
+            滚子半径: ${rollerRadius} mm
+            从动件运动规律: ${followerType}
+
+            请描述该凸轮机构的主要特征，并分析其从动件在各阶段（推程、回程）的运动特性（如速度、加速度变化趋势）。`;
+
+            // 调用 DeepSeek API 进行凸轮机构分析
+            sendToDeepSeek(camPrompt, "你是一位专业的机械机构分析师，专注于凸轮机构。");
+        });
+
+        // 绑定事件监听器 - 绘制凸轮轮廓 (静态绘制)
+        drawCamButton.addEventListener('click', () => {
+            stopFourbarAnimation(); 
+            stopCamAnimation(); // 停止凸轮仿真
+            const baseRadius = parseFloat(camBaseRadiusInput.value);
+            const lift = parseFloat(camLiftInput.value);
+            const pushAngle = parseFloat(camPushAngleInput.value);
+            const returnAngle = parseFloat(camReturnAngleInput.value);
+            const rollerRadius = parseFloat(camRollerRadiusInput.value); 
+
+            if (isNaN(baseRadius) || isNaN(lift) || isNaN(pushAngle) || isNaN(returnAngle) || isNaN(rollerRadius) || baseRadius <= 0 || lift < 0 || pushAngle < 0 || returnAngle < 0 || rollerRadius < 0) {
+                aiResponse.textContent = '绘制凸轮请确保所有参数为有效正数（基圆半径需大于0）。';
+                return;
+            }
+            if (pushAngle + returnAngle > 360) {
+                 aiResponse.textContent = '推程角度和回程角度之和不能超过360度。';
+                 return;
+            }
+            if (pushAngle + returnAngle < 360) {
+                 aiResponse.textContent = '警告：推程和回程角度之和小于360度，凸轮轮廓将不完整或包含停歇段。当前绘制按等速推程和回程处理。';
+            }
+
+            // 计算并存储轮廓点
+            camProfilePoints = calculateCamProfilePoints(baseRadius, lift, pushAngle, returnAngle, rollerRadius);
+            // 绘制静态轮廓
+            const scale = calculateCamScale(camCanvas.width, camCanvas.height, baseRadius, lift, rollerRadius);
+            
+            camCtx.clearRect(0, 0, camCanvas.width, camCanvas.height);
+            drawCamProfileFromPoints(camCtx, camProfilePoints, baseRadius, rollerRadius, scale, 0); // 静态绘制，无旋转
+            drawFollower(camCtx, 0, rollerRadius, scale, baseRadius); // 绘制从动件在最低点
+            
+            aiResponse.textContent = '凸轮轮廓已绘制完成。注意：当前绘制假设为径向滚子从动件，并严格按照等速推程和回程角度进行。';
+        });
+
+        // 绑定事件监听器 - 开始凸轮仿真
+        startCamSimulationButton.addEventListener('click', () => {
+            const baseRadius = parseFloat(camBaseRadiusInput.value);
+            const lift = parseFloat(camLiftInput.value);
+            const pushAngle = parseFloat(camPushAngleInput.value);
+            const returnAngle = parseFloat(camReturnAngleInput.value);
+            const rollerRadius = parseFloat(camRollerRadiusInput.value); 
+
+            if (isNaN(baseRadius) || isNaN(lift) || isNaN(pushAngle) || isNaN(returnAngle) || isNaN(rollerRadius) || baseRadius <= 0 || lift < 0 || pushAngle < 0 || returnAngle < 0 || rollerRadius < 0) {
+                aiResponse.textContent = '请先输入有效的凸轮参数才能开始仿真。';
+                return;
+            }
+
+            stopFourbarAnimation(); 
+            stopCamAnimation(); // 停止旧的凸轮仿真
+            
+            // 重新计算并存储轮廓点，以防参数在静态绘制后有修改
+            camProfilePoints = calculateCamProfilePoints(baseRadius, lift, pushAngle, returnAngle, rollerRadius);
+            camCurrentAngle = 0; // 重置角度
+            animateCam(); // 开始新的凸轮仿真
+        });
+
+        // 绑定事件监听器 - 停止凸轮仿真
+        stopCamSimulationButton.addEventListener('click', () => {
+            stopCamAnimation();
+        });
+
+
+        // 绑定事件监听器 - 齿轮传动分析
+        analyzeGearButton.addEventListener('click', () => {
+            stopFourbarAnimation(); 
+            stopCamAnimation(); // 停止凸轮仿真
+            const inputTeeth = parseFloat(gearInputTeeth.value);
+            const outputTeeth = parseFloat(gearOutputTeeth.value);
+
+            if (isNaN(inputTeeth) || isNaN(outputTeeth) || inputTeeth <= 0 || outputTeeth <= 0) {
+                aiResponse.textContent = '请输入有效的齿数（正整数）。';
+                return;
+            }
+
+            const gearPrompt = `请作为机械设计基础的AI助教，分析以下齿轮传动装置：
+            主动轮齿数 Z1: ${inputTeeth}
+            从动轮齿数 Z2: ${outputTeeth}
+
+            请计算该齿轮传动的传动比，并简要说明其传动特性（如转向关系、是否减速/增速）。`;
+
+            // 调用 DeepSeek API 进行齿轮传动分析
+            sendToDeepSeek(gearPrompt, "你是一位专业的机械机构分析师，专注于齿轮传动。");
+        });
+
+
+        // Canvas 初始设置和响应式调整 (四杆)
+        function resizeFourbarCanvas() {
+            fourbarCanvas.width = fourbarCanvas.parentElement.clientWidth;
+            fourbarCanvas.height = Math.min(400, fourbarCanvas.width * 0.75);
+            if (fourbarAnimationFrameId) { 
+            } else { 
+                 fourbarCtx.clearRect(0, 0, fourbarCanvas.width, fourbarCanvas.height);
+                 fourbarCtx.fillStyle = '#333';
+                 fourbarCtx.font = '16px Arial';
+                 fourbarCtx.textAlign = 'center';
+                 fourbarCtx.fillText('输入杆长并点击“开始动态仿真”', fourbarCanvas.width / 2, fourbarCanvas.height / 2);
+                 fourbarCtx.fillText('或“AI分析机构类型”', fourbarCanvas.width / 2, fourbarCanvas.height / 2 + 25);
+            }
+        }
+        window.addEventListener('load', resizeFourbarCanvas);
+        window.addEventListener('resize', resizeFourbarCanvas);
+
+        // Canvas 初始设置和响应式调整 (凸轮)
+        function resizeCamCanvas() {
+            camCanvas.width = camCanvas.parentElement.clientWidth;
+            camCanvas.height = Math.min(400, camCanvas.width); 
+            
+            camCtx.clearRect(0, 0, camCanvas.width, camCanvas.height);
+            camCtx.fillStyle = '#333';
+            camCtx.font = '16px Arial';
+            camCtx.textAlign = 'center';
+            camCtx.fillText('输入凸轮参数并点击“绘制凸轮轮廓”', camCanvas.width / 2, camCanvas.height / 2);
+            camCtx.fillText('或“开始凸轮仿真”', camCanvas.width / 2, camCanvas.height / 2 + 25);
+        }
+        window.addEventListener('load', resizeCamCanvas);
+        window.addEventListener('resize', resizeCamCanvas);
+
+
+        // 页面加载时，在画布上显示初始提示 (四杆)
+        window.onload = () => {
+            resizeFourbarCanvas(); 
+            fourbarCtx.fillStyle = '#333';
+            fourbarCtx.font = '16px Arial';
+            fourbarCtx.textAlign = 'center';
+            fourbarCtx.fillText('输入杆长并点击“开始动态仿真”', fourbarCanvas.width / 2, fourbarCanvas.height / 2);
+            fourbarCtx.fillText('或“AI分析机构类型”', fourbarCanvas.width / 2, fourbarCanvas.height / 2 + 25);
+
+            resizeCamCanvas(); 
+        };
+
+    </script>
+</body>
+</html>
